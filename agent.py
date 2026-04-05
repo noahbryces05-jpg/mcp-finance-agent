@@ -1,5 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 import requests
+import yfinance as yf
 
 # 1. Initialize the Server
 mcp = FastMCP("FinanceAndMarketAgent")
@@ -37,12 +38,56 @@ def get_live_crypto_price(asset_id: str) -> str:
     except Exception as e:
         return "Error: Could not connect to the live market API."
 
-# 5. Run the server (with a test print right before it)
+# 5. Tool: Live Commodities Pricing (Oil)
+@mcp.tool()
+def get_live_oil_price(oil_type: str) -> str:
+    """Fetches the current live price of crude oil per barrel in USD. Valid inputs are 'WTI' or 'Brent'."""
+    ticker = "CL=F" if oil_type.upper() == "WTI" else "BZ=F"
+    name = "WTI Crude" if oil_type.upper() == "WTI" else "Brent Crude"
+    
+    try:
+        commodity = yf.Ticker(ticker)
+        todays_data = commodity.history(period="1d")
+        price = todays_data['Close'].iloc[0]
+        return f"The current live price of {name} Oil is ${price:.2f} USD per barrel."
+    except Exception as e:
+        return f"Error: Could not fetch data for {oil_type}. Please ensure you request 'WTI' or 'Brent'."
+
+# 6. Tool: Company News & Sentiment Analysis
+@mcp.tool()
+def get_company_news(ticker: str) -> str:
+    """Fetches the top 5 most recent financial news headlines for a specific company or asset ticker to assist with sentiment analysis."""
+    try:
+        asset = yf.Ticker(ticker)
+        news_items = asset.news
+        
+        if not news_items:
+            return f"No recent news found for {ticker.upper()}."
+        
+        headlines = []
+        for item in news_items[:5]:
+            # The yfinance API recently nested news data under a 'content' key
+            content = item.get('content', item) 
+            title = content.get('title', 'No Title')
+            
+            # The publisher name is also nested deeper now under 'provider'
+            provider = content.get('provider', {}).get('displayName', 'Unknown')
+            
+            headlines.append(f"- {title} (Source: {provider})")
+        
+        formatted_news = f"Recent news headlines for {ticker.upper()}:\n" + "\n".join(headlines)
+        return formatted_news
+    except Exception as e:
+        return f"Error fetching news for {ticker}: Please check the ticker symbol."
+
+# 7. Run the server 
 if __name__ == "__main__":
-    # This line tests the API to prove it works before starting the server
-    print("\n--- TESTING API CONNECTION ---")
+    # Testing the APIs before booting the server
+    print("\n--- TESTING API CONNECTIONS ---")
     print(get_live_crypto_price("ethereum"))
+    print(get_live_oil_price("WTI"))
+    print("\n--- TESTING NEWS FETCH ---")
+    print(get_company_news("AAPL")) # Fetching Apple news to test
     print("------------------------------\n")
     
-    # This line officially starts the MCP server
     mcp.run()
